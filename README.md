@@ -1,4 +1,4 @@
-  # ffmpeg-loudnorm-helper
+   # ffmpeg-loudnorm-helper
 
 [![License](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://github.com/Indiscipline/ffmpeg-loudnorm-helper/blob/master/LICENSE.md)
 
@@ -11,11 +11,18 @@ Developed using the wonderful [Clap](https://github.com/kbknapp/clap-rs) crate.
 
 
 ## Usage
-ffmpeg-loudnorm-helper is designed to work using your shell's command substitution capability. Bash example:
-    ```ffmpeg -i input.mov -c:v copy -c:a libopus $(ffmpeg-lh input.mov) normalized.mkv```
+ffmpeg-loudnorm-helper is designed to work using your shell's command substitution capability.
+
+Bash example:
+```
+ffmpeg -i input.mov -c:v copy -c:a libopus $(ffmpeg-lh input.mov) normalized.mkv
+```
+
 Windows CMD:
-    ```for /f \"tokens=*\" %i in ('ffmpeg-lh input.mov') do ffmpeg -i input.mov -c:v copy -c:a libopus %i normalized.mkv```
-    
+```
+for /f "tokens=*" %i in ('ffmpeg-lh input.mov') do ffmpeg -i input.mov -c:v copy -c:a libopus %i normalized.mkv
+```
+
 Full help available on `--help` switch.
 
 
