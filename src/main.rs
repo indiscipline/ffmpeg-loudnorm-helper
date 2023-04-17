@@ -12,6 +12,7 @@ use std::io::{self, Write}; //, IsTerminal}; #![feature(is_terminal)]
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Serialize, Deserialize};
+use std::f32;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Loudness {
@@ -40,6 +41,7 @@ fn progress_thread() -> Arc<AtomicBool> {
     finished
 }
 
+
 fn main() {
     let matches = clap::builder::Command::new("ffmpeg-loudnorm-helper")
         .version(crate_version!())
@@ -60,24 +62,27 @@ Windows CMD:
             )
         .arg(Arg::new("I")
             .short('i')
-            .visible_aliases(&["i", "I"])
+            .long("i")
+            .ignore_case(true)
             .required(false)
             .allow_hyphen_values(true)
             .default_value("-16.0")
-            .help("Integrated loudness target. Range is -70.0 - -5.0."))
+            .help("Integrated loudness target. Clamped to valid range [-70.0..-5.0]."))
         .arg(Arg::new("LRA")
             .short('l')
-            .visible_aliases(&["lra", "LRA"])
+            .long("lra")
+            .ignore_case(true)
             .required(false)
             .default_value("6.0")
-            .help("Loudness range target. Range is 1.0 - 20.0."))
+            .help("Loudness range target. Clamped to valid range [1.0..20.0]."))
         .arg(Arg::new("TP")
             .short('t')
-            .visible_aliases(&["tp", "TP"])
+            .long("tp")
+            .ignore_case(true)
             .required(false)
             .allow_hyphen_values(true)
             .default_value("-1.0")
-            .help("Maximum true peak. Range is -9.0 - +0.0."))
+            .help("Maximum true peak. Clamped to valid range [-9.0..0.0]."))
         .arg(Arg::new("resample")
             .short('r')
             .long("resample")
@@ -86,9 +91,9 @@ Windows CMD:
         .get_matches();
 
     let input_path = matches.get_one::<String>("INPUT").unwrap(); // defaults provided = safe
-    let target_i : f32 = matches.get_one::<String>("I").unwrap().parse().unwrap();
-    let target_lra : f32 = matches.get_one::<String>("LRA").unwrap().parse().unwrap();
-    let target_tp : f32 = matches.get_one::<String>("TP").unwrap().parse().unwrap();
+    let target_i = matches.get_one::<String>("I").unwrap().parse::<f32>().unwrap().clamp(-70.0, -5.0);
+    let target_lra = matches.get_one::<String>("LRA").unwrap().parse::<f32>().unwrap().clamp(1.0, 20.0);
+    let target_tp = matches.get_one::<String>("TP").unwrap().parse::<f32>().unwrap().clamp(-9.0, 0.0);
 
     let mut command = Command::new("ffmpeg");
     command.current_dir(&env::current_dir().unwrap())
