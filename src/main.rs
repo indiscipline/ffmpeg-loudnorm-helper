@@ -3,7 +3,7 @@ extern crate clap;
 extern crate serde_json;
 extern crate serde;
 
-use clap::{Arg, App};
+use clap::{Arg};
 use std::env;
 use std::thread;
 use std::process::Command;
@@ -41,7 +41,7 @@ fn progress_thread() -> Arc<AtomicBool> {
 }
 
 fn main() {
-    let matches = App::new("ffmpeg-loudnorm-helper")
+    let matches = clap::builder::Command::new("ffmpeg-loudnorm-helper")
         .version(crate_version!())
         .author(crate_authors!())
         .about(
@@ -54,36 +54,36 @@ Designed to work using your shell's command substitution. Bash example:
 Windows CMD:
     'for /f \"tokens=*\" %i in ('ffmpeg-lh input.mov') do ffmpeg -i input.mov -c:v copy -c:a libopus %i normalized.mkv'"
         )
-        .arg(Arg::with_name("INPUT")
+        .arg(Arg::new("INPUT")
             .help("Sets the input file to scan")
             .required(true)
             )
-        .arg(Arg::with_name("I")
-            .short("i")
-            .long("i")
+        .arg(Arg::new("I")
+            .short('i')
+            .visible_aliases(&["i", "I"])
             .required(false)
             .allow_hyphen_values(true)
             .default_value("-16.0")
             .help("Integrated loudness target. Range is -70.0 - -5.0. Default value is -16.0"))
-        .arg(Arg::with_name("LRA")
-            .short("l")
-            .long("lra")
+        .arg(Arg::new("LRA")
+            .short('l')
+            .visible_aliases(&["lra", "LRA"])
             .required(false)
             .default_value("6.0")
             .help("Loudness range target. Range is 1.0 - 20.0. Default value is 6.0"))
-        .arg(Arg::with_name("TP")
-            .short("t")
-            .long("tp")
+        .arg(Arg::new("TP")
+            .short('t')
+            .visible_aliases(&["tp", "TP"])
             .required(false)
             .allow_hyphen_values(true)
             .default_value("-1.0")
             .help("Maximum true peak. Range is -9.0 - +0.0. Default value is -1.0"))
         .get_matches();
 
-    let input_path = matches.value_of("INPUT").unwrap();
-    let target_i : f32 = matches.value_of("I").unwrap().parse().unwrap();
-    let target_lra : f32 = matches.value_of("LRA").unwrap().parse().unwrap();
-    let target_tp : f32 = matches.value_of("TP").unwrap().parse().unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let target_i : f32 = matches.get_one::<String>("I").unwrap().parse().unwrap();
+    let target_lra : f32 = matches.get_one::<String>("LRA").unwrap().parse().unwrap();
+    let target_tp : f32 = matches.get_one::<String>("TP").unwrap().parse().unwrap();
 
     let mut command = Command::new("ffmpeg");
     command.current_dir(&env::current_dir().unwrap())
