@@ -3,7 +3,7 @@ extern crate clap;
 extern crate serde_json;
 extern crate serde;
 
-use clap::{Arg};
+use clap::Arg;
 use std::env;
 use std::thread;
 use std::process::Command;
@@ -64,23 +64,28 @@ Windows CMD:
             .required(false)
             .allow_hyphen_values(true)
             .default_value("-16.0")
-            .help("Integrated loudness target. Range is -70.0 - -5.0. Default value is -16.0"))
+            .help("Integrated loudness target. Range is -70.0 - -5.0."))
         .arg(Arg::new("LRA")
             .short('l')
             .visible_aliases(&["lra", "LRA"])
             .required(false)
             .default_value("6.0")
-            .help("Loudness range target. Range is 1.0 - 20.0. Default value is 6.0"))
+            .help("Loudness range target. Range is 1.0 - 20.0."))
         .arg(Arg::new("TP")
             .short('t')
             .visible_aliases(&["tp", "TP"])
             .required(false)
             .allow_hyphen_values(true)
             .default_value("-1.0")
-            .help("Maximum true peak. Range is -9.0 - +0.0. Default value is -1.0"))
+            .help("Maximum true peak. Range is -9.0 - +0.0."))
+        .arg(Arg::new("resample")
+            .short('r')
+            .long("resample")
+            .action(clap::ArgAction::SetTrue)
+            .help("Add a resampling filter hardcoded to 48kHz after loudnorm (which might upsample to 192kHz)"))
         .get_matches();
 
-    let input_path = matches.get_one::<String>("INPUT").unwrap();
+    let input_path = matches.get_one::<String>("INPUT").unwrap(); // defaults provided = safe
     let target_i : f32 = matches.get_one::<String>("I").unwrap().parse().unwrap();
     let target_lra : f32 = matches.get_one::<String>("LRA").unwrap().parse().unwrap();
     let target_tp : f32 = matches.get_one::<String>("TP").unwrap().parse().unwrap();
@@ -107,13 +112,16 @@ Windows CMD:
     let json: String = lines.join("\n");
 
     let loudness: Loudness = serde_json::from_str(&json).unwrap();
-    let af = format!("-af loudnorm=linear=true:I={}:LRA={}:TP={}:measured_I={}:measured_TP={}:measured_LRA={}:measured_thresh={}:offset={}:print_format=summary",
+    let af = format!("-af loudnorm=linear=true:I={}:LRA={}:TP={}:measured_I={}:measured_TP={}:measured_LRA={}:measured_thresh={}:offset={}:print_format=summary{}",
             target_i, target_lra, target_tp,
             loudness.input_i,
             loudness.input_tp,
             loudness.input_lra,
             loudness.input_thresh,
-            loudness.target_offset
+            loudness.target_offset,
+            if matches.get_flag("resample") {
+                    ",aresample=osr=48000,aresample=resampler=soxr:precision=28"
+                } else { "" }
     );
 
     print!("{}", af);
