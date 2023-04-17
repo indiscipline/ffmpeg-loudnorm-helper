@@ -3,12 +3,14 @@ extern crate clap;
 extern crate serde_json;
 extern crate serde;
 
-
 use clap::{Arg, App};
 use std::env;
+use std::thread;
 use std::process::Command;
-//use std::io::{self, Write};
-
+use std::time::Duration;
+use std::io::{self, Write}; //, IsTerminal}; #![feature(is_terminal)]
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -20,6 +22,23 @@ struct Loudness {
     target_offset: String,
 }
 
+fn progress_thread() -> Arc<AtomicBool> {
+    const PROGRESS_CHARS: [&str; 12] = ["⠂", "⠃", "⠁", "⠉", "⠈", "⠘", "⠐", "⠰", "⠠", "⠤", "⠄", "⠆"];
+    let finished = Arc::new(AtomicBool::new(false));
+    //if io::stderr().is_terminal() { //            TODO: uncomment when stabilizes
+        let stop_signal = Arc::clone(&finished);
+        let _ = thread::spawn(move || {
+            for pc in PROGRESS_CHARS.iter().cycle() {
+                if stop_signal.load(Ordering::Relaxed) {
+                    break;
+                };
+                write!(io::stderr(), "Processing {}\r", pc).unwrap();
+                thread::sleep(Duration::from_millis(250));
+            }
+        });
+    //}
+    finished
+}
 
 fn main() {
     let matches = App::new("ffmpeg-loudnorm-helper")
@@ -75,14 +94,17 @@ Windows CMD:
         .arg(format!("loudnorm=I={}:LRA={}:tp={}:print_format=json",target_i,target_lra,target_tp))
         .args(&["-f", "null", "-"]);
 
-    let output = command.output().expect("Failed to execute ffmpeg process");
-    //println!("status: {}", output.status);
+    let output = {
+        let finished = progress_thread();
+        let output_res = command.output();
+        finished.store(false, Ordering::Relaxed);
+        output_res.expect("Failed to execute ffmpeg process")
+    };
 
     let output_s = String::from_utf8_lossy(&output.stderr);
     let lines: Vec<&str> = output_s.lines().collect();
     let (_, lines) = lines.split_at(lines.len() - 12);
     let json: String = lines.join("\n");
-    //println!("{:?}", lines);
 
     let loudness: Loudness = serde_json::from_str(&json).unwrap();
     let af = format!("-af loudnorm=linear=true:I={}:LRA={}:TP={}:measured_I={}:measured_TP={}:measured_LRA={}:measured_thresh={}:offset={}:print_format=summary",
