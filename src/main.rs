@@ -8,7 +8,7 @@ use std::env;
 use std::thread;
 use std::process::Command;
 use std::time::Duration;
-use std::io::{self, Write}; //, IsTerminal}; #![feature(is_terminal)]
+//use std::io::{self, Write, IsTerminal}; #![feature(is_terminal)]
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Serialize, Deserialize};
@@ -19,26 +19,26 @@ struct Loudness {
     input_i: String,
     input_tp: String,
     input_lra: String,
-    input_thresh:String,
+    input_thresh: String,
     target_offset: String,
 }
 
-fn progress_thread() -> Arc<AtomicBool> {
+fn progress_thread() -> (Arc<AtomicBool>, thread::JoinHandle<()>) {
     const PROGRESS_CHARS: [&str; 12] = ["⠂", "⠃", "⠁", "⠉", "⠈", "⠘", "⠐", "⠰", "⠠", "⠤", "⠄", "⠆"];
     let finished = Arc::new(AtomicBool::new(false));
     //if io::stderr().is_terminal() { //            TODO: uncomment when stabilizes
-        let stop_signal = Arc::clone(&finished);
-        let _ = thread::spawn(move || {
-            for pc in PROGRESS_CHARS.iter().cycle() {
-                if stop_signal.load(Ordering::Relaxed) {
-                    break;
-                };
-                write!(io::stderr(), "Processing {}\r", pc).unwrap();
-                thread::sleep(Duration::from_millis(250));
-            }
-        });
+    let stop_signal = Arc::clone(&finished);
+    let handle = thread::spawn(move || {
+        for pc in PROGRESS_CHARS.iter().cycle() {
+            if stop_signal.load(Ordering::Relaxed) {
+                break;
+            };
+            eprint!("Processing {}\r", pc);
+            thread::sleep(Duration::from_millis(250));
+        }
+    });
     //}
-    finished
+    (finished, handle)
 }
 
 
@@ -105,30 +105,46 @@ Windows CMD:
         .args(&["-f", "null", "-"]);
 
     let output = {
-        let finished = progress_thread();
+        let (finished, _) = progress_thread();
         let output_res = command.output();
-        finished.store(false, Ordering::Relaxed);
-        output_res.expect("Failed to execute ffmpeg process")
+        finished.store(false, Ordering::SeqCst);
+        output_res.expect("Failed to execute ffmpeg process!")
     };
 
     let output_s = String::from_utf8_lossy(&output.stderr);
-    let lines: Vec<&str> = output_s.lines().collect();
-    let (_, lines) = lines.split_at(lines.len() - 12);
-    let json: String = lines.join("\n");
+    if output.status.success() {
+        let loudness: Loudness = {
+            let json: String = {
+                let lines: Vec<&str> = output_s.lines().collect();
+                let (_, lines) = lines.split_at(lines.len() - 12);
+                lines.join("\n")
+            };
+            serde_json::from_str(&json).unwrap()
+        };
 
-    let loudness: Loudness = serde_json::from_str(&json).unwrap();
-    let af = format!("-af loudnorm=linear=true:I={}:LRA={}:TP={}:measured_I={}:measured_TP={}:measured_LRA={}:measured_thresh={}:offset={}:print_format=summary{}",
-            target_i, target_lra, target_tp,
-            loudness.input_i,
-            loudness.input_tp,
-            loudness.input_lra,
-            loudness.input_thresh,
-            loudness.target_offset,
-            if matches.get_flag("resample") {
-                    ",aresample=osr=48000,aresample=resampler=soxr:precision=28"
-                } else { "" }
-    );
+        {
+            let measured_tp = loudness.input_tp.parse::<f32>().expect("Measured TP value is not a valid number!");
+            let measured_i =  loudness.input_i.parse::<f32>().expect("Measured TP value is not a valid number!");
+            let tp_diff = target_tp - measured_tp;
+            let i_diff = target_i - measured_i;
+            if i_diff > tp_diff {
+                eprintln!("⚠ Not enough headroom! Dynamic normalization will be used. Headroom: {}dB, required: {}dB.", tp_diff, i_diff);
+            }
+        };
 
-    print!("{}", af);
-    //io::stdout().write_all(&output.stderr).unwrap();
+        let af = format!("-af loudnorm=linear=true:I={}:LRA={}:TP={}:measured_I={}:measured_TP={}:measured_LRA={}:measured_thresh={}:offset={}:print_format=summary{}",
+                target_i, target_lra, target_tp,
+                loudness.input_i,
+                loudness.input_tp,
+                loudness.input_lra,
+                loudness.input_thresh,
+                loudness.target_offset,
+                if matches.get_flag("resample") {
+                        ",aresample=osr=48000,aresample=resampler=soxr:precision=28"
+                    } else { "" }
+        );
+        print!("{}", af);
+    } else {
+        eprintln!("{}", output_s);
+    }
 }
