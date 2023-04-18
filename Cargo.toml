@@ -1,7 +1,11 @@
 [package]
-name = "ffmpeg-lh"
+name = "ffmpeg-loudnorm-helper"
 version = "0.2.0"
 authors = ["Kirill I <elephanttalk@protonmail.com>"]
+
+[[bin]]
+name = "ffmpeg-lh"
+path = "src/main.rs"
 
 [badges]
 maintenance = { status = "passively-maintained" }
