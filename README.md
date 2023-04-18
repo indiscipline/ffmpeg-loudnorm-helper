@@ -1,4 +1,4 @@
-# ffmpeg-loudnorm-helper
+# ffmpeg-loudnorm-helper <img src="ffmpeg-loudnorm-helper.svg" align="right" alt="ffmpeg-loudnorm-helper logo" width="20%"/>
 [![License](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://github.com/Indiscipline/ffmpeg-loudnorm-helper/blob/master/LICENSE.md)
 
 Command line helper for performing audio loudness normalization with ffmpeg's `loudnorm`[^1] audio filter. 
