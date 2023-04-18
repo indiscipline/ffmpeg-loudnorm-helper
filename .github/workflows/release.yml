@@ -34,7 +34,7 @@ jobs:
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
           # Note that glob pattern is not supported yet.
-          bin: $bin-$tag-$target
+          bin: ffmpeg-lh
           tar: unix
           zip: windows
           token: ${{ secrets.GITHUB_TOKEN }}
