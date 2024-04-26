@@ -8,7 +8,7 @@ use std::env;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
-//use std::io::{self, Write, IsTerminal}; #![feature(is_terminal)]
+use std::io::{self, IsTerminal};
 use serde::{Deserialize, Serialize};
 use std::f32;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -23,22 +23,22 @@ struct Loudness {
     target_offset: String,
 }
 
-fn progress_thread() -> (Arc<AtomicBool>, thread::JoinHandle<()>) {
+fn progress_thread() -> Arc<AtomicBool> {
     const PROGRESS_CHARS: [&str; 12] = ["⠂", "⠃", "⠁", "⠉", "⠈", "⠘", "⠐", "⠰", "⠠", "⠤", "⠄", "⠆"];
     let finished = Arc::new(AtomicBool::new(false));
-    //if io::stderr().is_terminal() { //            TODO: uncomment when stabilizes
-    let stop_signal = Arc::clone(&finished);
-    let handle = thread::spawn(move || {
-        for pc in PROGRESS_CHARS.iter().cycle() {
-            if stop_signal.load(Ordering::Relaxed) {
-                break;
-            };
-            eprint!("Processing {}\r", pc);
-            thread::sleep(Duration::from_millis(250));
-        }
-    });
-    //}
-    (finished, handle)
+    if io::stderr().is_terminal() { // Stable since 1.70 (2023-06-01)
+        let stop_signal = Arc::clone(&finished);
+        let _ = thread::spawn(move || {
+            for pc in PROGRESS_CHARS.iter().cycle() {
+                if stop_signal.load(Ordering::Relaxed) {
+                    break;
+                };
+                eprint!("Processing {}\r", pc);
+                thread::sleep(Duration::from_millis(250));
+            }
+        });
+    }
+    finished
 }
 
 fn main() {
@@ -50,10 +50,11 @@ fn main() {
 Performs the loudness scanning pass of the given file and outputs the string
 of desired loudnorm options to be included in ffmpeg arguments.
 
-Designed to work using your shell's command substitution. Bash example:
-    'ffmpeg -i input.mov -c:v copy -c:a libopus $(ffmpeg-lh input.mov) normalized.mkv'
-Windows CMD:
-    'for /f \"tokens=*\" %i in ('ffmpeg-lh input.mov') do ffmpeg -i input.mov -c:v copy -c:a libopus %i normalized.mkv'"
+Designed to work using your shell's command substitution.
+* Bash example:
+  'ffmpeg -i input.mov -c:v copy -c:a libopus $(ffmpeg-lh input.mov) normalized.mkv'
+* Windows CMD:
+  'for /f \"tokens=*\" %i in ('ffmpeg-lh input.mov') do ffmpeg -i input.mov -c:v copy -c:a libopus %i normalized.mkv'"
         )
         .arg(Arg::new("INPUT")
             .help("Path to the input file.")
@@ -109,7 +110,7 @@ Windows CMD:
         .args(&["-f", "null", "-"]);
 
     let output = {
-        let (finished, _) = progress_thread();
+        let finished = progress_thread();
         let output_res = command.output();
         finished.store(false, Ordering::SeqCst);
         output_res.expect("Failed to execute ffmpeg process!")
@@ -137,11 +138,11 @@ Windows CMD:
             let measured_tp = loudness
                 .input_tp.parse::<f32>().expect("Measured TP value is not a valid number!");
             let measured_i = loudness
-                .input_i.parse::<f32>().expect("Measured TP value is not a valid number!");
-            let tp_diff = target_tp - measured_tp;
-            let i_diff = target_i - measured_i;
-            if i_diff > tp_diff {
-                eprintln!("? Not enough headroom! Dynamic normalization will be used. Headroom: {}dB, required: {}dB.", tp_diff, i_diff);
+                .input_i.parse::<f32>().expect("Measured I value is not a valid number!");
+            let tp_delta = target_tp - measured_tp;
+            let i_delta = target_i - measured_i;
+            if i_delta > tp_delta {
+                eprintln!("Not enough headroom! Dynamic normalization will be used. Headroom: {}dB, required: {}dB.", tp_delta, i_delta);
             }
         };
 
