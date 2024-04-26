@@ -118,12 +118,19 @@ Windows CMD:
     let output_s = String::from_utf8_lossy(&output.stderr);
     if output.status.success() {
         let loudness: Loudness = {
-            let json: String = {
-                let lines: Vec<&str> = output_s.lines().collect();
-                let (_, lines) = lines.split_at(lines.len() - 12);
-                lines.join("\n")
-            };
-            serde_json::from_str(&json).unwrap()
+            // Scanning loudnorm measurement output for the json object
+            let json_str = output_s.lines().scan(false, |in_json, line| {
+                match line.trim() {
+                    "{" => { *in_json = true; Some(Some(line)) },
+                    "}" => None, // Skip lines following json
+                    _ if *in_json => Some(Some(line)),
+                    _ => Some(None),
+                }
+            }).filter_map(|ln| ln).collect::<Vec<&str>>().join("\n") + "\n}";
+
+            serde_json::from_str(&json_str).expect(
+                &format!("Error parsing the loudnorm measurement output:\n{}", &json_str)
+            )
         };
 
         {
